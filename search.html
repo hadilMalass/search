@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search and Highlight</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .search-container {
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 10px 0;
+            z-index: 100;
+        }
+        #search-input {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .content {
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+        .highlight {
+            background-color: #ffeb3b;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+        .results-info {
+            margin: 10px 0;
+            color: #666;
+            font-style: italic;
+        }
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+        button {
+            padding: 8px 15px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <input type="text" id="search-input" placeholder="Search for answers...">
+        <div class="results-info" id="results-info">Ready to search</div>
+        <div class="navigation">
+            <button id="prev-btn" disabled>Previous</button>
+            <button id="next-btn" disabled>Next</button>
+        </div>
+    </div>
+    
+    <div class="content" id="content">
+        <h2>Understanding the difference between grid-template and grid-auto</h2>
+        <p>CSS Grid provides two types of grid definition properties: grid-template and grid-auto. Understanding the difference is crucial for effective layout design.</p>
+        
+        <h3>grid-template</h3>
+        <p>The grid-template properties (grid-template-rows, grid-template-columns, and grid-template-areas) are used to define explicit grid tracks. You explicitly specify the size of rows and columns, and optionally name grid areas.</p>
+        
+        <h3>grid-auto</h3>
+        <p>The grid-auto properties (grid-auto-rows, grid-auto-columns, and grid-auto-flow) control how implicit grid tracks are created. These come into play when grid items are placed outside of the explicitly defined grid.</p>
+        
+        <h3>Key Differences</h3>
+        <ul>
+            <li>grid-template defines the explicit grid structure</li>
+            <li>grid-auto controls the behavior of implicit grid tracks</li>
+            <li>grid-template is used when you know exactly how your grid should be structured</li>
+            <li>grid-auto handles items that don't fit your explicit grid definition</li>
+        </ul>
+        
+        <h3>When to Use Each</h3>
+        <p>Use grid-template when you have a fixed layout structure. Use grid-auto when you need flexibility for content that might exceed your initial grid definition.</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('search-input');
+            const content = document.getElementById('content');
+            const resultsInfo = document.getElementById('results-info');
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            
+            let currentMatches = [];
+            let currentIndex = -1;
+            
+            searchInput.addEventListener('input', performSearch);
+            prevBtn.addEventListener('click', navigateToPrevMatch);
+            nextBtn.addEventListener('click', navigateToNextMatch);
+            
+            function performSearch() {
+                const searchTerm = searchInput.value.trim();
+                
+                // Clear previous highlights
+                const highlights = content.querySelectorAll('.highlight');
+                highlights.forEach(highlight => {
+                    const parent = highlight.parentNode;
+                    parent.replaceChild(document.createTextNode(highlight.textContent), highlight);
+                    parent.normalize();
+                });
+                
+                if (searchTerm === '') {
+                    resultsInfo.textContent = 'Ready to search';
+                    prevBtn.disabled = true;
+                    nextBtn.disabled = true;
+                    currentMatches = [];
+                    currentIndex = -1;
+                    return;
+                }
+                
+                // Find all text nodes in content
+                const walker = document.createTreeWalker(
+                    content,
+                    NodeFilter.SHOW_TEXT,
+                    null,
+                    false
+                );
+                
+                const regex = new RegExp(escapeRegExp(searchTerm), 'gi');
+                currentMatches = [];
+                let node;
+                
+                while (node = walker.nextNode()) {
+                    if (node.nodeValue.trim() === '') continue;
+                    
+                    let match;
+                    while ((match = regex.exec(node.nodeValue)) !== null) {
+                        currentMatches.push({
+                            node: node,
+                            index: match.index,
+                            length: match[0].length
+                        });
+                    }
+                }
+                
+                if (currentMatches.length === 0) {
+                    resultsInfo.textContent = 'No matches found';
+                    prevBtn.disabled = true;
+                    nextBtn.disabled = true;
+                    return;
+                }
+                
+                // Highlight all matches
+                currentMatches.forEach(match => {
+                    highlightMatch(match.node, match.index, match.length);
+                });
+                
+                resultsInfo.textContent = '${currentMatches.length} matches found';
+                prevBtn.disabled = currentMatches.length <= 1;
+                nextBtn.disabled = currentMatches.length <= 1;
+                
+                // Scroll to first match
+                if (currentMatches.length > 0) {
+                    navigateToMatch(0);
+                }
+            }
+            
+            function highlightMatch(textNode, index, length) {
+                const parent = textNode.parentNode;
+                const textContent = textNode.nodeValue;
+                
+                const before = textContent.substring(0, index);
+                const match = textContent.substring(index, index + length);
+                const after = textContent.substring(index + length);
+                
+                const beforeNode = document.createTextNode(before);
+                const highlightNode = document.createElement('span');
+                highlightNode.className = 'highlight';
+                highlightNode.textContent = match;
+                const afterNode = document.createTextNode(after);
+                
+                parent.replaceChild(afterNode, textNode);
+                parent.insertBefore(highlightNode, afterNode);
+                parent.insertBefore(beforeNode, highlightNode);
+            }
+            
+            function navigateToPrevMatch() {
+                if (currentIndex <= 0) {
+                    currentIndex = currentMatches.length - 1;
+                } else {
+                    currentIndex--;
+                }
+                navigateToMatch(currentIndex);
+            }
+            
+            function navigateToNextMatch() {
+                if (currentIndex >= currentMatches.length - 1) {
+                    currentIndex = 0;
+                } else {
+                    currentIndex++;
+                }
+                navigateToMatch(currentIndex);
+            }
+            
+            function navigateToMatch(index) {
+                if (index < 0 || index >= currentMatches.length) return;
+                
+                currentIndex = index;
+                const match = currentMatches[index];
+                const highlight = document.createElement('span');
+                highlight.className = 'highlight active';
+                highlight.textContent = match.node.nodeValue.substring(
+                    match.index,
+                    match.index + match.length
+                );
+                
+                // Replace the text node with our highlight
+                const parent = match.node.parentNode;
+                const textContent = match.node.nodeValue;
+                
+                const before = textContent.substring(0, match.index);
+                const after = textContent.substring(match.index + match.length);
+                
+                const beforeNode = document.createTextNode(before);
+                const afterNode = document.createTextNode(after);
+                
+                parent.replaceChild(afterNode, match.node);
+                parent.insertBefore(highlight, afterNode);
+                parent.insertBefore(beforeNode, highlight);
+                
+                // Scroll to the highlighted element
+                highlight.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+                
+                resultsInfo.textContent =' Match ${index + 1} of ${currentMatches.length}';
+            }
+            
+            function escapeRegExp(string) {
+                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+        });
+    </script>
+</body>
+</html>
